@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Awesome Shell</title>
+    <style>
+        body {
+            font-family: 'VT323', monospace;
+            background-color: #1e1e1e;
+            color: #a9b7c6;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        h1 {
+            color: #64b5f6;
+            margin-bottom: 20px;
+            animation: fadeIn 1s ease-out;
+        }
+        .terminal-container {
+            background-color: #282c34;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+            width: 80%;
+            max-width: 800px;
+            animation: fadeIn 1.2s ease-out;
+        }
+        .terminal {
+            padding: 15px;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+        .prompt {
+            color: #98c379;
+            margin-right: 5px;
+        }
+        .input-area {
+            display: flex;
+            align-items: center;
+            padding: 5px 15px;
+            background-color: #21252b;
+            border-top: 1px solid #3e4451;
+        }
+        input[type="text"] {
+            flex-grow: 1;
+            background-color: transparent;
+            color: #abb2bf;
+            border: none;
+            outline: none;
+            font-family: 'VT323', monospace;
+            font-size: 1.1em;
+            padding: 8px 0;
+        }
+        .output {
+            margin-top: 8px;
+            white-space: pre-wrap;
+            font-size: 1.1em;
+            line-height: 1.4;
+            animation: fadeIn 0.5s ease-out forwards;
+            opacity: 0;
+            transform: translateY(5px);
+        }
+        .output:nth-child(even) {
+            background-color: rgba(0, 0, 0, 0.1);
+            padding: 5px 0;
+            border-radius: 3px;
+        }
+        .error {
+            color: #e06c75;
+        }
+        @keyframes blink-caret {
+            from, to { border-color: transparent }
+            50% { border-color: #98c379; }
+        }
+        .input-area .prompt::after {
+            content: '_';
+            animation: blink-caret 0.75s step-end infinite;
+            margin-left: 3px;
+        }
+        input[type="text"]:focus {
+            box-shadow: 0 0 5px #64b5f6;
+        }
+    </style>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+</head>
+<body>
+    <h1>Welcome to the Fun Shell!</h1>
+    <div class="terminal-container">
+        <div class="terminal" id="terminal">
+            <div id="output-area"></div>
+        </div>
+        <div class="input-area">
+            <span class="prompt">mysh></span>
+            <input type="text" id="command-input" autofocus>
+        </div>
+    </div>
+
+    <script>
+    const terminal = document.getElementById('terminal');
+    const outputArea = document.getElementById('output-area');
+    const commandInput = document.getElementById('command-input');
+
+    let currentDir = ''; // store current directory
+
+    async function runCommand(command) {
+        if (!command.trim()) return;
+
+        const promptText = currentDir ? `${currentDir}> ${command}` : `mysh> ${command}`;
+        const commandDiv = document.createElement('div');
+        commandDiv.classList.add('output');
+        commandDiv.textContent = promptText;
+        outputArea.appendChild(commandDiv);
+
+        // Special handling for cls (clear screen)
+        if (command.trim().toLowerCase() === 'cls') {
+            outputArea.innerHTML = '';
+            return;
+        }
+
+        try {
+            const res = await fetch('/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command })
+            });
+
+            const data = await res.json();
+            const outputDiv = document.createElement('div');
+            outputDiv.classList.add('output');
+            outputDiv.innerHTML = data.output ? data.output : `<span class="error">${data.error}</span>`;
+            outputArea.appendChild(outputDiv);
+
+            // Update currentDir from backend
+            if (data.cwd) currentDir = data.cwd;
+
+        } catch (err) {
+            const errorDiv = document.createElement('div');
+            errorDiv.classList.add('output', 'error');
+            errorDiv.textContent = `Error: ${err.message}`;
+            outputArea.appendChild(errorDiv);
+        }
+
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    commandInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            const command = commandInput.value.trim();
+            commandInput.value = '';
+            runCommand(command);
+        }
+    });
+
+    // Typing effect for welcome message
+    const welcomeMessage = "Welcome to the Fun Shell!\nType 'help' to see available commands.";
+    let messageIndex = 0;
+    const typingSpeed = 50;
+
+    function typeWelcomeMessage() {
+        if (messageIndex < welcomeMessage.length) {
+            const char = welcomeMessage[messageIndex];
+            if (char === '\n') {
+                const lineBreak = document.createElement('div');
+                lineBreak.classList.add('output');
+                lineBreak.innerHTML = '';
+                outputArea.appendChild(lineBreak);
+            } else {
+                const lastOutput = outputArea.lastElementChild;
+                if (lastOutput && !lastOutput.textContent.endsWith('\n')) {
+                    lastOutput.textContent += char;
+                } else {
+                    const newOutput = document.createElement('div');
+                    newOutput.classList.add('output');
+                    newOutput.textContent = char;
+                    outputArea.appendChild(newOutput);
+                }
+            }
+            messageIndex++;
+            setTimeout(typeWelcomeMessage, typingSpeed);
+        } else {
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+    }
+
+    setTimeout(typeWelcomeMessage, 300);
+
+    commandInput.addEventListener('blur', () => {
+        setTimeout(() => commandInput.focus(), 10);
+    });
+</script>
+
+</body>
+</html>

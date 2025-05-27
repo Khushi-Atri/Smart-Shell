@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Welcome to LUNA</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=VT323&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'VT323', monospace;
+      background-color: #1c1c1c;
+      color: #e6e6e6;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    #video-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 100%;
+      z-index: -1;
+      overflow: hidden;
+    }
+
+    #video-container video {
+      min-width: 100%;
+      min-height: 100%;
+      object-fit: cover;
+      filter: brightness(0.3);
+    }
+
+    #main-content {
+      z-index: 1;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 2.8em;
+      background: linear-gradient(45deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: gradientShift 5s ease infinite;
+      background-size: 300% 300%;
+    }
+
+    @keyframes gradientShift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .terminal-container {
+      background-color: rgba(0, 0, 0, 0.75);
+      border-radius: 8px;
+      width: 80%;
+      max-width: 800px;
+      margin-top: 30px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+    }
+
+    .terminal {
+      padding: 15px;
+      overflow-y: auto;
+      max-height: 400px;
+    }
+
+    .prompt {
+      color: gold;
+      margin-right: 5px;
+    }
+
+    .input-area {
+      display: flex;
+      align-items: center;
+      padding: 5px 15px;
+      background-color: #21252b;
+      border-top: 1px solid #3e4451;
+    }
+
+    input[type="text"] {
+      flex-grow: 1;
+      background-color: transparent;
+      color: #abb2bf;
+      border: none;
+      outline: none;
+      font-family: 'VT323', monospace;
+      font-size: 1.1em;
+      padding: 8px 0;
+    }
+
+    .output {
+      
+      margin-top: 8px;
+      white-space: pre-wrap;
+      font-size: 1.1em;
+    }
+
+    .error {
+      color: #ff4787;
+    }
+
+    .ai-output {
+      color: #00ffff;
+      animation: fadeIn 1s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .suggestions {
+      font-size: 0.9em;
+      margin-top: 5px;
+      color: #888888;
+    }
+
+    .suggestion {
+      cursor: pointer;
+      padding: 2px 4px;
+      margin-right: 5px;
+      background-color: #2c2c2c;
+      border-radius: 4px;
+    }
+
+    .suggestion:hover {
+      background-color: #444;
+    }
+  </style>
+</head>
+<body>
+  <div id="video-container"></div>
+
+  <div id="main-content">
+    <h1>Welcome to SmartShell&nbsp;<span id="title-rest">LUNA</span></h1>
+
+    <div class="terminal-container">
+      <div class="terminal" id="terminal">
+        <div id="output-area"></div>
+        <div class="suggestions" id="suggestions"></div>
+      </div>
+      <div class="input-area">
+        <span class="prompt">mysh></span>
+        <input type="text" id="command-input" autocomplete="off" />
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function addBackgroundVideo() {
+      const container = document.getElementById('video-container');
+      const video = document.createElement('video');
+      video.src = '/static/video.mkv';
+      video.autoplay = true;
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      container.appendChild(video);
+    }
+
+    addBackgroundVideo();
+
+    const terminal = document.getElementById('terminal');
+    const outputArea = document.getElementById('output-area');
+    const commandInput = document.getElementById('command-input');
+    const suggestions = document.getElementById('suggestions');
+    let currentDir = '';
+    let history = [];
+
+    async function runCommand(command) {
+      if (!command.trim()) return;
+      history.push(command);
+      suggestions.innerHTML = "";
+
+      const promptText = currentDir ? `${currentDir}> ${command}` : `mysh> ${command}`;
+      const cmdDiv = document.createElement('div');
+      cmdDiv.classList.add('output');
+      cmdDiv.textContent = promptText;
+      outputArea.appendChild(cmdDiv);
+
+      if (command.toLowerCase() === 'cls') {
+        outputArea.innerHTML = '';
+        return;
+      }
+
+      try {
+        const res = await fetch('/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command })
+        });
+
+        const data = await res.json();
+        const outDiv = document.createElement('div');
+        outDiv.classList.add('output');
+
+        if (command.toLowerCase().startsWith("ai:")) {
+          outDiv.classList.add('ai-output');
+          outDiv.innerHTML = `🪄 ${data.output ? data.output : `<span class="error">${data.error}</span>`}`;
+        } else {
+          outDiv.innerHTML = data.output ? data.output : `<span class="error">${data.error}</span>`;
+        }
+
+        outputArea.appendChild(outDiv);
+        if (data.cwd) currentDir = data.cwd;
+      } catch (err) {
+        const errorDiv = document.createElement('div');
+        errorDiv.classList.add('output', 'error');
+        errorDiv.textContent = `Error: ${err.message}`;
+        outputArea.appendChild(errorDiv);
+      }
+
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function updateSuggestions(value) {
+      suggestions.innerHTML = '';
+      if (!value.trim()) return;
+      const lower = value.toLowerCase();
+      const matches = [...new Set(history.filter(cmd => cmd.toLowerCase().startsWith(lower)))];
+      matches.slice(-5).reverse().forEach(cmd => {
+        const span = document.createElement('span');
+        span.className = 'suggestion';
+        span.textContent = cmd;
+        span.onclick = () => {
+          commandInput.value = cmd;
+          commandInput.focus();
+        };
+        suggestions.appendChild(span);
+      });
+    }
+
+    commandInput.addEventListener('input', () => {
+      updateSuggestions(commandInput.value);
+    });
+
+    commandInput.addEventListener('keypress', function(event) {
+      if (event.key === 'Enter') {
+        const command = commandInput.value.trim();
+        commandInput.value = '';
+        runCommand(command);
+      }
+    });
+
+    commandInput.addEventListener('blur', () => {
+      setTimeout(() => commandInput.focus(), 10);
+    });
+  </script>
+</body>
+</html>
